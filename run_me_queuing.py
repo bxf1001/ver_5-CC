@@ -16,6 +16,7 @@ import json
 from queue import Queue
 import sqlite3
 import os
+from PyQt6.QtCore import QTimer
 
 
 
@@ -57,14 +58,16 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
         self.aborted = True
 
     def _precheck_events(self):
-        #self.start_applications() # Start the applications
-        #self.get_phonenumber()  # Get the phone number  
-        #self.click_call_button()   # Click the call button
-        #self.start_recording() # Start the recording
+        self.start_applications() # Start the applications
+        self.get_phonenumber()  # Get the phone number  
+        sleep(2)
+        self.click_call_button()   # Click the call button
+        self.start_recording() # Start the recording
         self.lock_screen() # Lock the screen
 
     def _postcheck_events(self):
-        #self.timer_count()  # Start the timer_count function
+        self.timer_count()  # Start the timer_count function
+        sleep(1)
         self.click_end_button() # Click the end button
         sleep(1)
         self.unlock_screen() # Unlock the screen
@@ -103,6 +106,8 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
 
 
     def start_recording(self): # Start the recording of the video call once the call is connected
+        if self.aborted:
+            return
         self.dialog = self.appwhatsapp.window(title="Video call ‎- WhatsApp")
         sleep(2)
         try:
@@ -115,47 +120,40 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
         while True and not self.aborted: # Loop until the button is enabled
             send_keys("{TAB}") # Press the TAB key to focus the button
             try:
-                if self.button.is_enabled():
+                if  self.button.is_enabled():
                     send_keys("{VK_F12}")   # Press the F12 key to start recording
                     break
-                elif not self.dialog.exists():
-                    self.lock_screen()
-                    self.signals.show_error_message.emit('Call Not Connected', 'Auto Call in Ten Seconds.')
-                    sleep(10)
-                    self.lock_screen()
-                    self.click_call_button()
-                    self.panel.set_focus()
-
             except:
                 sleep(3)
                 continue
 
 
     def lock_screen(self): # Lock the screen to prevent any interruptions
+        if self.aborted:
+            return
         sleep(1)
         send_keys("^%{VK_NUMPAD0}")
 
 
-    def click_end_button(self): # Click the end call button to end the call
-        try:
-            sleep(2)
-            button = self.appwhatsapp.Dialog.child_window(title="End call", auto_id="EndCallButton", control_type="Button")
-            if button.exists():  # Check if the button exists before attempting to click it
-                button.set_focus()
-                sleep(0.5)
-                button.click()
-                #send_keys("{VK_F12}")
-                return True  # Return True if the button was clicked successfully
-        except Exception as e:
-            print("ERROR:", e)
-        return False  # Return False if the button could not be clicked
-    
-    def unlock_screen(self): # Unlock the screen after the call has ended
-        sleep(1)
-        send_keys("^%{VK_NUMPAD0}")
+    def click_end_button(self):  # Click the end call button to end the call
+        for _ in range(3):  # Try to click the button 3 times
+            try:
+                sleep(2)
+                button = self.appwhatsapp.Dialog.child_window(title="End call", auto_id="EndCallButton", control_type="Button")
+                if button.exists():  # Check if the button exists before attempting to click it
+                    button.set_focus()
+                    sleep(0.5)
+                    button.click()
+                    #send_keys("{VK_F12}")
+                    return True  # Return True if the button was clicked successfully
+            except Exception as e:
+                print("ERROR:", e)
+        return False  # Return False if the button could not be clicked after 3 attempts
 
     def stop_recording(self): # terminate whatsapp if the end button is not clicked
         sleep(1)
+        if self.aborted:
+            return
         if not self.click_end_button():  # Check if the call was successfully ended
             print("Call could not be ended, attempting emergency shutdown...")
             try:
@@ -165,10 +163,18 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
                 send_keys("{VK_F12}")  # Press the F12 key to stop recording
             except Exception as e:
                 print("Error:", e)
+                return False  # Return False if the WhatsApp process could not be terminated
         else:
             print("Call ended successfully.")
             sleep(1)
             send_keys("{VK_F12}")  # Press the F12 key to stop recording
+        return True  # Return True if the recording was stopped successfully
+
+    def unlock_screen(self): # Unlock the screen after the call has ended
+        if self.aborted:
+            return
+        sleep(1)
+        send_keys("^%{VK_NUMPAD0}")
 
     def timer_count(self): # Timer function to count down the call duration
         count_down = 0
@@ -321,7 +327,7 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
         self.connect_button.setEnabled(True)
     
         # Connect to the database
-        conn = sqlite3.connect(r'C:\\Users\\Administrator\\Desktop\\Block List genrate\\New folder\\Ver_5_updated-main\\user_data.db')
+        conn = sqlite3.connect(r'D:\Ver_5_updated-main\database\\user_data.db')
         c = conn.cursor()
     
         # Get the user ID from the input field
@@ -422,6 +428,7 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
     @pyqtSlot(str, str)
     def show_error_message(self, title, text):
         QMessageBox.information(self, title, text)
+
     
     def remove_contact_from_result(self, item): # This is the slot function for the double-click event on the result_text_browser
         # Get the text of the double-clicked item

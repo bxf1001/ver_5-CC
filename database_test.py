@@ -6,7 +6,7 @@ with open('user_data.json', 'r') as f:
     data = json.load(f)
 
 # Create a new SQLite database and establish a connection
-conn = sqlite3.connect('user_data.db')
+conn = sqlite3.connect(r'D:\Ver_5_updated-main\database\\user_data.db')
 c = conn.cursor()
 
 # Create a new table if it doesn't already exist
@@ -23,7 +23,8 @@ c.execute('''
 # Insert the data into the table
 def insert_user(user_id, name, contact1, contact2, contact3):
     # Connect to the database
-    conn = sqlite3.connect(r'C:\\Users\\Administrator\\Desktop\\Block List genrate\\New folder\\Ver_5_updated-main\\user_data.db')
+    
+    conn = sqlite3.connect(r'D:\Ver_5_updated-main\database\\user_data.db')
     c = conn.cursor()
 
     # Insert the user's details into the users table
@@ -39,7 +40,7 @@ def insert_user(user_id, name, contact1, contact2, contact3):
 
 def update_user(user_id, name, contact1, contact2, contact3):
     # Connect to the database
-    conn = sqlite3.connect(r'C:\\Users\\Administrator\\Desktop\\Block List genrate\\New folder\\Ver_5_updated-main\\user_data.db')
+    conn = sqlite3.connect(r'D:\Ver_5_updated-main\database\\user_data.db')
     c = conn.cursor()
 
     # Update the user's details in the users table
@@ -55,7 +56,7 @@ def update_user(user_id, name, contact1, contact2, contact3):
 
 def delete_user(user_id):
     # Connect to the database
-    conn = sqlite3.connect(r'C:\\Users\\Administrator\\Desktop\\Block List genrate\\New folder\\Ver_5_updated-main\\user_data.db')
+    conn = sqlite3.connect(r'D:\Ver_5_updated-main\database\\user_data.db')
     c = conn.cursor()
 
     # Delete the user from the users table
@@ -69,7 +70,7 @@ def delete_user(user_id):
     conn.close()
 def print_database():
     # Connect to the database
-    conn = sqlite3.connect(r'C:\\Users\\Administrator\\Desktop\\Block List genrate\\New folder\\Ver_5_updated-main\\user_data.db')
+    conn = sqlite3.connect(r'D:\Ver_5_updated-main\database\\user_data.db')
     c = conn.cursor()
 
     # Select all data from the users table
@@ -84,4 +85,4 @@ def print_database():
     # Close the connection
     conn.close()
 
-print_database()
+#print_database()

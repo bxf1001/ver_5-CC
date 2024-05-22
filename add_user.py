@@ -129,7 +129,7 @@ class AddUser(QMainWindow):
 
     def load_user_from_db(self, user_id):
         # Define the database path
-        db_path = r'C:\\Users\\Administrator\\Desktop\\Block List genrate\\New folder\\Ver_5_updated-main\\user_data.db'
+        db_path = r'D:\Ver_5_updated-main\database\\user_data.db'
 
         # Check if the database file exists
         if not os.path.exists(db_path):
