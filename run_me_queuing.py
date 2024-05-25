@@ -1,8 +1,8 @@
 import datetime
 import subprocess
 import sys
-from PyQt6.QtCore import QRunnable, pyqtSignal, pyqtSlot, QThreadPool,QObject ,Qt
-from PyQt6.QtGui import QIcon,QKeySequence ,QDoubleValidator ,QFont
+from PyQt6.QtCore import QRunnable, pyqtSignal, pyqtSlot, QThreadPool,QObject ,Qt,QSize
+from PyQt6.QtGui import QIcon,QKeySequence ,QDoubleValidator ,QFont,QCursor
 from PyQt6.QtWidgets import QApplication, QStyleFactory, QMainWindow, QWidget, QLabel, QLineEdit, QListWidget,QListWidgetItem, QPushButton, QHBoxLayout, QGridLayout, QProgressBar,QMessageBox
 import warnings
 import uuid
@@ -16,8 +16,8 @@ import json
 from queue import Queue
 import sqlite3
 import os
-from PyQt6.QtCore import QTimer
 
+os.environ['QT_LOGGING_RULES'] = 'qt.qpa.*=false'
 
 
 warnings.simplefilter("ignore", UserWarning)
@@ -26,6 +26,7 @@ class WorkerSignals(QObject): # Create a class to hold the
     progress = pyqtSignal(int) # Create a progress signal with an additional string parameter
     finished = pyqtSignal(str) # Create a finished signal
     show_error_message = pyqtSignal(str, str)
+    progress_report = pyqtSignal(str)
 class WhatsApp(QRunnable): # Inherit from QRunnable 
 
 
@@ -56,6 +57,7 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
     def abort(self): # Add an abort method to stop the worker
         print("Aborting worker") 
         self.aborted = True
+        self.signals.progress_report.emit("Call Aborted")
 
     def _precheck_events(self):
         self.start_applications() # Start the applications
@@ -86,6 +88,7 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
         except :
             self.signals.show_error_message.emit('Error', 'Please Restart The WhatsApp and Try Running The Application Again.')
             raise Exception('Error starting WhatsApp')
+        self.signals.progress_report.emit('WhatsApp started successfully.')
         
     def get_phonenumber(self):  # Get the phone number from the user and open the whatsapp chat window
         sleep(0.25)
@@ -94,6 +97,7 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
         sleep(0.25)
         self.url = f"whatsapp://send?phone=+91{self.number}"
         self.subwhatsapp = subprocess.Popen(["cmd", "/C", f"start {self.url}"], shell=True)
+        self.signals.progress_report.emit(f"Opening WhatsApp chat window for {self.number}...")
 
     def click_call_button(self): # Click the call button in the WhatsApp chat window
         while True and not self.aborted: # Loop until the call button is clicked
@@ -103,7 +107,7 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
             except:
                 sleep(1)
                 continue
-
+        self.signals.progress_report.emit("Call button clicked successfully.")
 
     def start_recording(self): # Start the recording of the video call once the call is connected
         if self.aborted:
@@ -126,13 +130,14 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
             except:
                 sleep(3)
                 continue
-
+        self.signals.progress_report.emit("Recording started successfully.")
 
     def lock_screen(self): # Lock the screen to prevent any interruptions
         if self.aborted:
             return
         sleep(1)
         send_keys("^%{VK_NUMPAD0}")
+        self.signals.progress_report.emit("Screen locked successfully.")
 
 
     def click_end_button(self):  # Click the end call button to end the call
@@ -149,6 +154,7 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
             except Exception as e:
                 print("ERROR:", e)
         return False  # Return False if the button could not be clicked after 3 attempts
+        self.signals.progress_report.emit("Call ended successfully.")
 
     def stop_recording(self): # terminate whatsapp if the end button is not clicked
         sleep(1)
@@ -169,15 +175,18 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
             sleep(1)
             send_keys("{VK_F12}")  # Press the F12 key to stop recording
         return True  # Return True if the recording was stopped successfully
+        self.signals.progress_report.emit("Recording stopped successfully.")
 
     def unlock_screen(self): # Unlock the screen after the call has ended
         if self.aborted:
             return
         sleep(1)
         send_keys("^%{VK_NUMPAD0}")
+        self.signals.progress_report.emit("Screen unlocked successfully.")
 
     def timer_count(self): # Timer function to count down the call duration
         count_down = 0
+        self.signals.progress_report.emit("Timer started successfully.")
         while count_down < self.timer and not self.aborted: 
             if keyboard.is_pressed("space"):
                 print("you breaked the process")
@@ -187,6 +196,10 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
                 count_down += 1
                 progress_percentage = int((count_down / self.timer) * 100) # Calculate the progress percentage 
                 self.signals.progress.emit(progress_percentage) # Emit the progress signal with uuid parameter
+                minutes_count_down, seconds_count_down = divmod(count_down, 60)
+                minutes_timer, seconds_timer = divmod(self.timer, 60)
+                self.signals.progress_report.emit(f"Timer: {minutes_count_down}:{seconds_count_down}/{minutes_timer}:{seconds_timer}")
+        self.signals.progress_report.emit("Timer completed successfully.")
             
    
 
@@ -196,58 +209,61 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
         super().__init__(*args, **kwargs) # Pass *args and **kwargs to the super class 
 
         self.setWindowTitle("Phone Portal Connect V5") # Set the window title
-        self.setGeometry(100, 100, 600, 400)
+        self.setGeometry(100, 100, 800, 400)
         self.setWindowIcon(QIcon('icons/logo.png'))
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
-
+        
 
         self.user_id_input = QLineEdit(self)
         self.user_id_input.setPlaceholderText("Enter User ID")
         self.search_button = QPushButton("Search", self)
         self.search_button.setShortcut(QKeySequence('Enter')) # Set the shortcut key for the search button to Enter
         self.result_label = QLabel(self)
-        self.progress_label = QLabel('                                                        Call Not in Progress ')
-        self.progress_label.setFont(QFont('Arial Black'))
-        self.progress_label.setStyleSheet("color : magenta ")
+        self.progress_label = QLabel('')
+        self.progress_label.setFont(QFont('Pirulen Rg', 10))
+        #self.progress_label.setStyleSheet("color : magenta ")
         self.result_text_browser = QListWidget(self)  # Three Contacts load from user_data.json
         self.result_text_browser.itemDoubleClicked.connect(self.add_contact_from_result)
         self.contact_text_browser = QListWidget(self)    # Selected contacts will be displayed here
         self.contact_text_browser.itemDoubleClicked.connect(self.remove_contact_from_result)
         self.add_button = QPushButton("Add Contact", self)
-        self.add_button.setStyleSheet("color : darkblue,") # Add selected contact to the contact_text_browser
         self.btn_add_user = QPushButton('Add User', self) # Add User button
         self.remove_button = QPushButton("Remove Contact", self) # Remove selected contact from the contact_text_browser
-        self.remove_button.setStyleSheet("color : brown")
         self.connect_button = QPushButton("Connect", self) # Connect button
-        self.connect_button.setStyleSheet("color: blue") # Set the font color of the connect button to green
         self.connect_button.setShortcut(QKeySequence('Ctrl+Enter')) # Set the shortcut key for the connect button to Ctrl+Return
         self.swap_button = QPushButton("Swap", self) # Swap button to swap the selected contacts
         self.abort_button = QPushButton("Abort", self)
         self.abort_button.setShortcut(QKeySequence('End')) # Abort button to abort the current operation
-        self.abort_button.setStyleSheet("color: red") # Set the font color of the abort button to red
         self.abort_button.setEnabled(False)
         self.reset_button = QPushButton("Reset", self)  # Reset button to reset the UI elements
-        self.timer1_input = QLineEdit(self) # Timer input fields 
+        self.timer1_input = QLineEdit(self) # Timer input fields
         self.timer1_input.setValidator(QDoubleValidator(0, 99.99, 2))
         self.timer2_input = QLineEdit(self) # Timer input fields
         self.timer2_input.setValidator(QDoubleValidator(0, 99.99, 2)) # Set validator to accept float values
         self.timer3_input = QLineEdit(self) # Timer input fields
         self.timer3_input.setValidator(QDoubleValidator(0, 99.99, 2)) # Set validator to accept float values
         self.progress_bar = QProgressBar(self) # Create new progress bar
-        self.progress_bar.setStyleSheet("QProgressBar { height: 40px; width: 200px; }")
         self.progress_bar.setAutoFillBackground(True)
         self.progress_bar.setValue(0) # Set the initial value of the progress bar to 0 
         self.progress_bar.setValue(0) # Set the initial value of the progress bar to 0
         self.connect_button.setEnabled(False)
         # Set the icons for the buttons
         self.search_button.setIcon(QIcon(r"icons\\search_icon.png")) # Set the icon for the search button
+        self.search_button.setIconSize(QSize(32, 32))  # Change 32, 32 to the desired width and height
+        self.connect_button.setIconSize(QSize(32, 32))  # Change 32, 32 to the desired width and height
         self.add_button.setIcon(QIcon(r"icons\\add_icon.png")) # Set the icon for the add button
+        self.add_button.setIconSize(QSize(32, 32))  # Change 32, 32 to the desired width and height
         self.btn_add_user.setIcon(QIcon(r"icons\\adduser_icon.png")) # Set the icon for the add user button
+        self.btn_add_user.setIconSize(QSize(32, 32))  # Change 32, 32 to the desired width and height
         self.remove_button.setIcon(QIcon(r"icons\\remove_icon.png")) # Set the icon for the remove button
+        self.remove_button.setIconSize(QSize(32, 32))  # Change 32, 32 to the desired width and height
         self.connect_button.setIcon(QIcon(r"icons\\connect_icon.png")) # Set the icon for the connect button
         self.swap_button.setIcon(QIcon(r"icons\\swap_icon.png"))  # Set the icon for the swap button
+        self.swap_button.setIconSize(QSize(32, 32))  # Change 32, 32 to the desired width and height
         self.abort_button.setIcon(QIcon(r"icons\\abort_icon.png"))    # Set the icon for the abort button
+        self.abort_button.setIconSize(QSize(32, 32))  # Change 32, 32 to the desired width and height
         self.reset_button.setIcon(QIcon(r"icons\\reset_icon.png")) # Set the icon for the reset button
+        self.reset_button.setIconSize(QSize(32, 32))  # Change 32, 32 to the desired width and height
 
         # Set the placeholder text for the timer input fields
         self.timer1_input.setPlaceholderText("Timer 1")
@@ -263,6 +279,85 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
         self.timer1_input.setEnabled(False)
         self.timer2_input.setEnabled(False)
         self.timer3_input.setEnabled(False)
+        
+        # Set the style for the widgets
+        self.user_id_input.setStyleSheet("background-color: #f2f2f2; color: black; border: 1px solid black; border-radius: 5px; padding: 10px 24px; text-align: center; text-decoration: none;font-size: 16px; margin: 4px 2px; ")
+        self.search_button.setStyleSheet("background-color: #4CAF50; color: white; border: none; border-radius: 5px; padding: 10px 24px; text-align: center; text-decoration: none;  font-size: 16px; margin: 4px 2px; ;")
+        self.add_button.setStyleSheet("background-color: #C39BD3; color: white; border: none; border-radius: 5px; padding: 10px 24px; text-align: center; text-decoration: none;  font-size: 16px; margin: 4px 2px; ")
+        self.btn_add_user.setStyleSheet("background-color: #ff6666; color: white; border: none; border-radius: 5px; padding: 10px 24px; text-align: center; text-decoration: none; font-size: 16px; margin: 4px 2px; ")  # Set the font color of the add user button to red
+        self.remove_button.setStyleSheet("background-color: #9999ff; color: white; border: none; border-radius: 5px; padding: 10px 24px; text-align: center; text-decoration: none;  font-size: 16px; margin: 4px 2px; ")
+        self.connect_button.setStyleSheet("""
+    QPushButton {
+        background-color: #05B8CC;  /* Green background */
+        border: none;  /* No border */
+        color: white;  /* White text */
+        padding: 15px 32px;  /* Padding */
+        text-align: center;  /* Centered text */
+        text-decoration: none;  /* No underline */
+        font-size: 18px;
+        margin: 4px 2px;
+          /* Mouse pointer changes when over button */
+        border-radius: 4px;  /* Rounded corners */
+    }
+
+    QPushButton:hover {
+        background-color: #45a049;  /* Green background on hover */
+    }
+
+    QPushButton:pressed {
+        background-color: #2e7d32;  /* Darker green background when pressed */
+    }
+""")
+        self.swap_button.setStyleSheet("background-color: #884EA0; color: white; border: none; border-radius: 5px; padding: 10px 24px; text-align: center; text-decoration: none; font-size: 16px; margin: 4px 2px; ") # Set the font color of the swap button to blue
+        self.abort_button.setStyleSheet("background-color: #cc0000; color: white; border: none; border-radius: 5px; padding: 10px 24px; text-align: center; text-decoration: none;  font-size: 16px; margin: 4px 2px; ") # Set the font color of the abort button to red
+        self.reset_button.setStyleSheet("background-color: #148F77; color: white; border: none; border-radius: 5px; padding: 10px 24px; text-align: center; text-decoration: none;  font-size: 16px; margin: 4px 2px; ") # Set the font color of the reset button to green
+        self.timer1_input.setStyleSheet("background-color: #f2f2f2; color: black; border: 1px solid black; border-radius: 5px; padding: 10px 24px; text-align: center; text-decoration: none;  font-size: 16px; margin: 4px 2px; ")
+        self.timer2_input.setStyleSheet("background-color: #f2f2f2; color: black; border: 1px solid black; border-radius: 5px; padding: 10px 24px; text-align: center; text-decoration: none;  font-size: 16px; margin: 4px 2px; ")
+        self.timer3_input.setStyleSheet("background-color: #f2f2f2; color: black; border: 1px solid black; border-radius: 5px; padding: 10px 24px; text-align: center; text-decoration: none;  font-size: 16px; margin: 4px 2px;")
+        self.result_text_browser.setStyleSheet("""
+        QListWidget {
+        background-color: #ffe6f0
+; 
+        color: #000000; 
+        border: 1px solid #ff0066; 
+        border-radius: 5px; 
+        padding: 10px; 
+        font-size: 16px; 
+        }
+        QListWidget::item:selected {
+            background-color: #808080;
+        }
+        """)
+        self.contact_text_browser.setStyleSheet("""
+        QListWidget {
+            background-color: #BB8FCE; 
+            color: #000000; 
+            border: 1px solid #000000; 
+            border-radius: 5px; 
+            padding: 10px; 
+            font-size: 16px; 
+        }
+        QListWidget::item:selected {
+            background-color: #808080;
+        }
+        """)
+
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid grey;
+                border-radius: 5px;
+                text-align: center;
+                height: 40px; 
+                width: 200px;
+            }
+        
+            QProgressBar::chunk {
+                background-color: #05B8CC;
+                width: 20px;
+            }
+        """)
+
+
 
         # Create a layout for the widgets
         layout = QHBoxLayout()
@@ -320,14 +415,23 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
         self.timer3_input.clear()
         self.contact_text_browser.clear()
         self.selected_contacts.clear()
-        self.progress_label.setText("                                                          Call Not in Progress")
+        self.progress_label.setText("Call Not in Progress")
         self.timer1_input.setEnabled(False)
         self.timer2_input.setEnabled(False)
         self.timer3_input.setEnabled(False)
         self.connect_button.setEnabled(True)
+        self.connect_button.setStyleSheet("background-color: magenta; color: #00ff99; border: none; border-radius: 5px; padding: 10px 24px; text-align: center; text-decoration: none; font-color : #ff0000; font-size: 16px; margin: 4px 2px; ") # Set the font color of the connect button to green
     
+        primary_db = r'D:\Ver_5_updated-main\database\\user_data.db'
+        alternative_db = r'\\booth3\PhoneBooth_bkup\database_bkup\\user_data.db'
+
+
         # Connect to the database
-        conn = sqlite3.connect(r'D:\Ver_5_updated-main\database\\user_data.db')
+        if os.path.exists(primary_db):
+            conn = sqlite3.connect(primary_db)
+        else:
+            conn = sqlite3.connect(alternative_db)
+
         c = conn.cursor()
     
         # Get the user ID from the input field
@@ -484,7 +588,7 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
         self.connect_button.setEnabled(False)
         self.progress_bar.setValue(0)  # Reset progress bar
         self.progress_bar.setMaximum(100) # Set maximum value for progress bar
-        self.progress_label.setText("                                                          Call In Progress")
+        self.progress_label.setText("Call In Progress")
         self.progress_label.setStyleSheet("color: green")
         self.start_workers(self.selected_contacts, [timer1, timer2, timer3]) # Start the workers
 
@@ -498,12 +602,15 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
             worker = WhatsApp(contact,float(timer) * 60)
             worker.setAutoDelete(True) # Automatically delete the worker when it finishes
             worker.signals.progress.connect(self.progress_bar.setValue) # Connect the progress signal to the progress bar
+            worker.signals.progress_report.connect(self.progress_label.setText)
             worker.signals.finished.connect(lambda: self.worker_completed(worker.uuid, contact)) # Connect the finished signal to the worker_completed function
             worker.signals.show_error_message.connect(self.show_error_message)
             self.worker_queue.put(worker) # Put the worker in the queue
 
             
         self.start_next_worker() # Start the next worker in the queue
+
+
 
     def timestamped_data(self, contact):
         user_id = self.user_id_input.text()
@@ -554,6 +661,8 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
     def worker_completed(self, uuid,contact): # This function is called when a worker has completed
         if len(self.selected_contacts) > 1: # If there are more contacts to process
             self.worker.lock_screen() # Lock the screen to prevent any interruptions
+        if len(self.selected_contacts) > 1: # If there are no more contacts to process
+            self.abort_button.setEnabled(True) # Enable the abort button
         self.timestamped_data(contact)   
         print(f"Worker with UUID {uuid} has completed") # Print the UUID of the completed worker
         self.worker_progress[uuid] = 100 # Set the progress of the worker to 100
@@ -566,7 +675,7 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
         self.reset_button.setEnabled(True)
         self.connect_button.setStyleSheet("color: blue")
         self.abort_button.setEnabled(False)
-        self.progress_label.setText("                                                          Call Completed ")
+        self.progress_label.setText("Call Completed ")
         self.progress_label.setStyleSheet("color : purple")
 
     def refresh_progress(self, num_workers):
@@ -589,7 +698,7 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
         self.reset_button.setEnabled(True)
         self.connect_button.setStyleSheet("color: blue")
         self.abort_button.setEnabled(False)
-        self.progress_label.setText("                                                          Call Not in Progress ")
+        self.progress_label.setText("Call Not in Progress ")
         self.progress_label.setStyleSheet("color : magenta ")
 
     def reset_function(self): # This is the slot function for the "Reset" button
@@ -606,7 +715,7 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
         self.timer3_input.setEnabled(False)
         self.progress_bar.setValue(0)
         self.connect_button.setEnabled(True)
-        self.progress_label.setText("                                                          Call Not in Progress")
+        self.progress_label.setText("Call Not in Progress")
         self.progress_label.setStyleSheet("color : magenta ")
 
 if __name__ == "__main__":
