@@ -16,17 +16,31 @@ import json
 from queue import Queue
 import sqlite3
 import os
+from reader import QScannerLocker ,QRCodeScanner
 
 os.environ['QT_LOGGING_RULES'] = 'qt.qpa.*=false'
 
 
 warnings.simplefilter("ignore", UserWarning)
+import cv2
+from pyzbar.pyzbar import decode
+import threading
+from pynput.keyboard import Key, Listener, Controller as KeyboardController
+from pynput.mouse import Button, Controller as MouseController
+import time
+
+
+
+
+
+
 class WorkerSignals(QObject): # Create a class to hold the
     error = pyqtSignal(tuple) # Create an error signal with a tuple parameter
     progress = pyqtSignal(int) # Create a progress signal with an additional string parameter
     finished = pyqtSignal(str) # Create a finished signal
     show_error_message = pyqtSignal(str, str)
     progress_report = pyqtSignal(str)
+
 class WhatsApp(QRunnable): # Inherit from QRunnable 
 
 
@@ -39,6 +53,7 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
         self.uuid = uuid.uuid4().hex          # Generate a unique identifier for the worker
         self.signals = WorkerSignals() # Create an instance of the WorkerSignals class
         self.widget = QWidget()
+        self.qr_code_scanner = QRCodeScanner()
 
     @pyqtSlot(int)        
     def run(self):          # Override the run method
@@ -63,8 +78,8 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
         self.start_applications() # Start the applications
         self.get_phonenumber()  # Get the phone number  
         sleep(2)
-        self.click_call_button()   # Click the call button
-        self.start_recording() # Start the recording
+        #self.click_call_button()   # Click the call button
+        #self.start_recording() # Start the recording
         self.lock_screen() # Lock the screen
 
     def _postcheck_events(self):
@@ -136,7 +151,7 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
         if self.aborted:
             return
         sleep(1)
-        send_keys("^%{VK_NUMPAD0}")
+        send_keys("^+a")
         self.signals.progress_report.emit("Screen locked successfully.")
 
 
@@ -153,7 +168,7 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
                     return True  # Return True if the button was clicked successfully
             except Exception as e:
                 print("ERROR:", e)
-        return False  # Return False if the button could not be clicked after 3 attempts
+                return False  # Return False if the button could not be clicked after 3 attempts
         self.signals.progress_report.emit("Call ended successfully.")
 
     def stop_recording(self): # terminate whatsapp if the end button is not clicked
@@ -174,14 +189,14 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
             print("Call ended successfully.")
             sleep(1)
             send_keys("{VK_F12}")  # Press the F12 key to stop recording
-        return True  # Return True if the recording was stopped successfully
+            return True  # Return True if the recording was stopped successfully
         self.signals.progress_report.emit("Recording stopped successfully.")
 
     def unlock_screen(self): # Unlock the screen after the call has ended
         if self.aborted:
             return
         sleep(1)
-        send_keys("^%{VK_NUMPAD0}")
+        send_keys("^+a")
         self.signals.progress_report.emit("Screen unlocked successfully.")
 
     def timer_count(self): # Timer function to count down the call duration
@@ -219,6 +234,7 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
         self.search_button = QPushButton("Search", self)
         self.search_button.setShortcut(QKeySequence('Enter')) # Set the shortcut key for the search button to Enter
         self.result_label = QLabel(self)
+        self.result_label.setFont(QFont('', 15))
         self.progress_label = QLabel('')
         self.progress_label.setFont(QFont('Pirulen Rg', 10))
         #self.progress_label.setStyleSheet("color : magenta ")
@@ -420,7 +436,28 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
         self.timer2_input.setEnabled(False)
         self.timer3_input.setEnabled(False)
         self.connect_button.setEnabled(True)
-        self.connect_button.setStyleSheet("background-color: magenta; color: #00ff99; border: none; border-radius: 5px; padding: 10px 24px; text-align: center; text-decoration: none; font-color : #ff0000; font-size: 16px; margin: 4px 2px; ") # Set the font color of the connect button to green
+        self.connect_button.setStyleSheet("""
+    QPushButton {
+        background-color: #50DA59;  /* Green background */
+        border: none;  /* No border */
+        color: white;  /* White text */
+        padding: 15px 32px;  /* Padding */
+        text-align: center;  /* Centered text */
+        text-decoration: none;  /* No underline */
+        font-size: 18px;
+        margin: 4px 2px;
+          /* Mouse pointer changes when over button */
+        border-radius: 4px;  /* Rounded corners */
+    }
+
+    QPushButton:hover {
+        background-color: #45a049;  /* Green background on hover */
+    }
+
+    QPushButton:pressed {
+        background-color: #2e7d32;  /* Darker green background when pressed */
+    }
+""")
     
         primary_db = r'D:\Ver_5_updated-main\database\\user_data.db'
         alternative_db = r'\\booth3\PhoneBooth_bkup\database_bkup\\user_data.db'
@@ -449,7 +486,7 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
         if row is not None:
             # The user was found in the database
             name, contact1, contact2, contact3 = row
-            self.result_label.setText(f"Name: {name}")
+            self.result_label.setText(f"NAME: {name.upper()}")
             self.result_text_browser.clear()
             for contact in (contact1, contact2, contact3):
                 if contact:
@@ -696,7 +733,28 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
         self.remove_button.setEnabled(True)
         self.swap_button.setEnabled(True)
         self.reset_button.setEnabled(True)
-        self.connect_button.setStyleSheet("color: blue")
+        self.connect_button.setStyleSheet("""
+    QPushButton {
+        background-color: #05B8CC;  /* Green background */
+        border: none;  /* No border */
+        color: white;  /* White text */
+        padding: 15px 32px;  /* Padding */
+        text-align: center;  /* Centered text */
+        text-decoration: none;  /* No underline */
+        font-size: 18px;
+        margin: 4px 2px;
+          /* Mouse pointer changes when over button */
+        border-radius: 4px;  /* Rounded corners */
+    }
+
+    QPushButton:hover {
+        background-color: #45a049;  /* Green background on hover */
+    }
+
+    QPushButton:pressed {
+        background-color: #2e7d32;  /* Darker green background when pressed */
+    }
+""")
         self.abort_button.setEnabled(False)
         self.progress_label.setText("Call Not in Progress ")
         self.progress_label.setStyleSheet("color : magenta ")
@@ -715,6 +773,28 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
         self.timer3_input.setEnabled(False)
         self.progress_bar.setValue(0)
         self.connect_button.setEnabled(True)
+        self.connect_button.setStyleSheet("""
+    QPushButton {
+        background-color: #05B8CC;  /* Green background */
+        border: none;  /* No border */
+        color: white;  /* White text */
+        padding: 15px 32px;  /* Padding */
+        text-align: center;  /* Centered text */
+        text-decoration: none;  /* No underline */
+        font-size: 18px;
+        margin: 4px 2px;
+          /* Mouse pointer changes when over button */
+        border-radius: 4px;  /* Rounded corners */
+    }
+
+    QPushButton:hover {
+        background-color: #45a049;  /* Green background on hover */
+    }
+
+    QPushButton:pressed {
+        background-color: #2e7d32;  /* Darker green background when pressed */
+    }
+""")
         self.progress_label.setText("Call Not in Progress")
         self.progress_label.setStyleSheet("color : magenta ")
 
