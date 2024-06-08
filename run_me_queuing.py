@@ -1,8 +1,9 @@
+
 import datetime
 import subprocess
 import sys
 from PyQt6.QtCore import QRunnable, pyqtSignal, pyqtSlot, QThreadPool,QObject ,Qt,QSize
-from PyQt6.QtGui import QIcon,QKeySequence ,QDoubleValidator ,QFont,QCursor
+from PyQt6.QtGui import QIcon,QKeySequence ,QDoubleValidator ,QFont
 from PyQt6.QtWidgets import QApplication, QStyleFactory, QMainWindow, QWidget, QLabel, QLineEdit, QListWidget,QListWidgetItem, QPushButton, QHBoxLayout, QGridLayout, QProgressBar,QMessageBox
 import warnings
 import uuid
@@ -16,18 +17,9 @@ import json
 from queue import Queue
 import sqlite3
 import os
-from reader import QScannerLocker ,QRCodeScanner
-
 os.environ['QT_LOGGING_RULES'] = 'qt.qpa.*=false'
 
-
 warnings.simplefilter("ignore", UserWarning)
-import cv2
-from pyzbar.pyzbar import decode
-import threading
-from pynput.keyboard import Key, Listener, Controller as KeyboardController
-from pynput.mouse import Button, Controller as MouseController
-import time
 
 
 
@@ -40,6 +32,7 @@ class WorkerSignals(QObject): # Create a class to hold the
     finished = pyqtSignal(str) # Create a finished signal
     show_error_message = pyqtSignal(str, str)
     progress_report = pyqtSignal(str)
+    
 
 class WhatsApp(QRunnable): # Inherit from QRunnable 
 
@@ -53,7 +46,7 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
         self.uuid = uuid.uuid4().hex          # Generate a unique identifier for the worker
         self.signals = WorkerSignals() # Create an instance of the WorkerSignals class
         self.widget = QWidget()
-        self.qr_code_scanner = QRCodeScanner()
+        self.break_flag = False
 
     @pyqtSlot(int)        
     def run(self):          # Override the run method
@@ -75,7 +68,7 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
         self.signals.progress_report.emit("Call Aborted")
 
     def _precheck_events(self):
-        self.start_applications() # Start the applications
+        #self.start_applications() # Start the applications
         self.get_phonenumber()  # Get the phone number  
         sleep(2)
         #self.click_call_button()   # Click the call button
@@ -91,7 +84,7 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
         sleep(1)
         self.stop_recording() # Stop the recording
         sleep(1)
-        self.lock_screen()  # Lock the screen
+        #self.lock_screen()  # Lock the screen
         self.signals.finished.emit(self.uuid) # Emit the finished signal with the uuid parameter
 
     def start_applications(self): # Start the applications whatsapp using pywinauto
@@ -206,6 +199,11 @@ class WhatsApp(QRunnable): # Inherit from QRunnable
             if keyboard.is_pressed("space"):
                 print("you breaked the process")
                 break
+            elif not self.dialog.exists(timeout=1):
+                self.signals.progress_report.emit("Call ended unexpectedly.")
+                self.break_flag = True
+                self.signals.show_error_message.emit('Error', 'WhatsApp Call got cut unexpectedly.')
+                return
             else:
                 sleep(1)
                 count_down += 1
@@ -459,8 +457,8 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
     }
 """)
     
-        primary_db = r'D:\Ver_5_updated-main\database\\user_data.db'
-        alternative_db = r'\\booth3\PhoneBooth_bkup\database_bkup\\user_data.db'
+        primary_db = r'C:\Users\Administrator\Desktop\Block List genrate\New folder\Ver_5_updated-main\database\\user_data.db'
+        alternative_db = r'D:\Ver_5_updated-main\database\\user_data.db'
 
 
         # Connect to the database
@@ -647,6 +645,15 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
             
         self.start_next_worker() # Start the next worker in the queue
 
+    def start_next_worker(self): # This function starts the next worker in the queue
+        if not self.break_flag:
+            if not self.worker_queue.empty(): # Check if the queue is not empty
+                self.worker = self.worker_queue.get() # Get the next worker from the queue
+                print(f"Starting worker with UUID {self.worker.uuid}") # Print the UUID of the worker
+                self.threadpool.start(self.worker) # Start the worker
+                self.abort_button.setEnabled(True)  # Enable the abort button
+        else:
+            QMessageBox.information(self, "Thread Broken", "Previous thread was broken, not starting the next one.")
 
 
     def timestamped_data(self, contact):
@@ -688,13 +695,6 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
             json.dump(timestamped_data, f)
             f.write('\n')  # Add a newline for readability
 
-    def start_next_worker(self): # This function starts the next worker in the queue
-        
-        if not self.worker_queue.empty(): # Check if the queue is not empty
-            self.worker = self.worker_queue.get() # Get the next worker from the queue
-            print(f"Starting worker with UUID {self.worker.uuid}") # Print the UUID of the worker
-            self.threadpool.start(self.worker) # Start the worker
-
     def worker_completed(self, uuid,contact): # This function is called when a worker has completed
         if len(self.selected_contacts) > 1: # If there are more contacts to process
             self.worker.lock_screen() # Lock the screen to prevent any interruptions
@@ -725,6 +725,8 @@ class PhonePortal(QMainWindow): # Inherit from QMainWindow
     def abort_function(self): # This is the slot function for the "Abort" button
         if self.worker:
             self.worker.abort()
+            contact = self.user_data[self.user_id_input.text()]['number']
+            self.timestamped_data(contact) 
         self.worker_queue. queue.clear()
         self.connect_button.setEnabled(True)
         self.progress_bar.setValue(0)
