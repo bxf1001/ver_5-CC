@@ -1,30 +1,57 @@
 import json
 import sqlite3
+import os
+from PyQt6.QtWidgets import QMessageBox
+
 
 # Load the data from the JSON file
 with open('user_data.json', 'r') as f:
     data = json.load(f)
 
+with open(r'C:\Users\Administrator\Desktop\Block List genrate\New folder\Ver_5_updated-main\datas\\url.json', 'r') as f:
+    url = json.load(f)
 # Create a new SQLite database and establish a connection
-conn = sqlite3.connect(r'D:\Ver_5_updated-main\database\\user_data.db')
+new_sql_lite_primary = url['data_path']
+new_sql_lite_secondary = url['data_path2']
+
+if os.path.exists(new_sql_lite_primary):
+    conn = sqlite3.connect(new_sql_lite_primary)
+elif os.path.exists(new_sql_lite_secondary):
+    conn = sqlite3.connect(new_sql_lite_secondary)
+else:
+    QMessageBox.warning(None, 'Error', 'Database file not found')
+
 c = conn.cursor()
 
-# Create a new table if it doesn't already exist
-c.execute('''
-    CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        phone1 TEXT,
-        phone2 TEXT,
-        phone3 TEXT
-    )
-''')
-
-# Insert the data into the table
-def insert_user(user_id, name, contact1, contact2, contact3):
-    # Connect to the database
+try:
+    # Create a new table if it doesn't already exist
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            phone1 TEXT,
+            phone2 TEXT,
+            phone3 TEXT
+        )
+    ''')
+except sqlite3.DatabaseError as e:
+    QMessageBox.warning(None, 'Error', f"An error occurred: {e}")
     
-    conn = sqlite3.connect(r'D:\Ver_5_updated-main\database\\user_data.db')
+def insert_user(user_id, name, contact1, contact2, contact3):
+
+    
+    # Define the primary and alternative database file paths
+    primary_db_path = url['data_path']
+    alternative_db_path = url['data_path2']
+
+    # Check if the primary database file exists
+    if os.path.exists(primary_db_path):
+        # If it exists, connect to it
+        conn = sqlite3.connect(primary_db_path)
+    else:
+        # If it doesn't exist, connect to the alternative database file
+        conn = sqlite3.connect(alternative_db_path)
+
     c = conn.cursor()
 
     # Insert the user's details into the users table
@@ -36,11 +63,20 @@ def insert_user(user_id, name, contact1, contact2, contact3):
     # Commit the changes and close the connection
     conn.commit()
     conn.close()
-# Fetch all the rows
 
 def update_user(user_id, name, contact1, contact2, contact3):
-    # Connect to the database
-    conn = sqlite3.connect(r'D:\Ver_5_updated-main\database\\user_data.db')
+    # Define the primary and alternative database file paths
+    primary_db_path = url['data_path']
+    alternative_db_path = url['data_path2']
+
+    # Check if the primary database file exists
+    if os.path.exists(primary_db_path):
+        # If it exists, connect to it
+        conn = sqlite3.connect(primary_db_path)
+    else:
+        # If it doesn't exist, connect to the alternative database file
+        conn = sqlite3.connect(alternative_db_path)
+
     c = conn.cursor()
 
     # Update the user's details in the users table
@@ -55,8 +91,18 @@ def update_user(user_id, name, contact1, contact2, contact3):
     conn.close()
 
 def delete_user(user_id):
-    # Connect to the database
-    conn = sqlite3.connect(r'D:\Ver_5_updated-main\database\\user_data.db')
+    # Define the primary and alternative database file paths
+    primary_db_path = url['data_path']
+    alternative_db_path = url['data_path2']
+
+    # Check if the primary database file exists
+    if os.path.exists(primary_db_path):
+        # If it exists, connect to it
+        conn = sqlite3.connect(primary_db_path)
+    else:
+        # If it doesn't exist, connect to the alternative database file
+        conn = sqlite3.connect(alternative_db_path)
+
     c = conn.cursor()
 
     # Delete the user from the users table
@@ -70,8 +116,9 @@ def delete_user(user_id):
     conn.close()
 def print_database():
     # Connect to the database
-    conn = sqlite3.connect(r'D:\Ver_5_updated-main\database\\user_data.db')
-    c = conn.cursor()
+    new_sql_lite = url['data_path']
+    conn = sqlite3.connect(new_sql_lite)
+    c = conn.cursor() # Create a cursor object
 
     # Select all data from the users table
     c.execute("SELECT * FROM users")
